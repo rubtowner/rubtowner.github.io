@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8" />
+    <title>RUBT ⇄ ETH Swap</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center">
+<div id="root"></div>
+
+<script type="text/babel">
+    const { useState, useEffect } = React;
+    const { ethers } = window.ethers;
+
+    /* ---------------- CONFIG ---------------- */
+    const RUBT_ADDRESS = '0x5F3011a4694C7228f3166fec1253351D8830606D';
+    const RUBT_ABI = [
+        'function buy(uint256 expectedRate) payable',
+        'function sell(uint256 value,uint256 expectedRate)',
+        'function rates() view returns (uint48 buyRate,uint48 sellRate,uint56 buyAmount,uint56 sellAmount,uint48 expiredAtBlock)',
+        'function decimals() view returns (uint8)',
+        'function balanceOf(address) view returns (uint256)'
+    ];
+
+    const ETH_LOGO  = 'https://upload.wikimedia.org/wikipedia/commons/7/70/Ethereum_logo.svg';
+    const RUBT_LOGO = 'https://rubtowner.github.io/logo.svg';
+
+    /* helpers */
+    const fmt = (bn, d=18, max=6) => bn ? Number(ethers.utils.formatUnits(bn,d)).toLocaleString('en-US',{maximumFractionDigits:max}) : '—';
+    const mulDiv = (a,b,c) => a.mul(b).div(c);
+
+    function Swap(){
+        const [provider,setProvider]=useState(null),[signer,setSigner]=useState(null),[acct,setAcct]=useState(null);
+        const [dec,setDec]=useState(18),[rates,setRates]=useState({buy:null,sell:null,buyLim:null,sellLim:null});
+        const [ethBal,setEthBal]=useState(null),[rubBal,setRubBal]=useState(null);
+        const [amt,setAmt]=useState(''),[dir,setDir]=useState('E2R');
+        const [loading,setLoading]=useState(false),[busy,setBusy]=useState(false);
+        const [err,setErr]=useState(''),[swapMsg,setSwapMsg]=useState(''),[txh,setTxh]=useState(null);
+
+        const tokenLogo=dir==='E2R'?ETH_LOGO:RUBT_LOGO;
+
+        const connect=async()=>{if(!window.ethereum)return alert('MetaMask?');const p=new ethers.providers.Web3Provider(window.ethereum);await p.send('eth_requestAccounts',[]);setProvider(p);setSigner(p.getSigner());setAcct(await p.getSigner().getAddress());};
+        const refresh=async()=>{if(!provider||!acct)return;try{setLoading(true);setErr('');const t=new ethers.Contract(RUBT_ADDRESS,RUBT_ABI,provider);const[d,r,eB,rB]=await Promise.all([t.decimals(),t.rates(),provider.getBalance(acct),t.balanceOf(acct)]);const[br,sr,ba,sa]=r;setDec(d);setRates({buy:br,sell:sr,buyLim:ba,sellLim:sa});setEthBal(eB);setRubBal(rB);}catch(e){console.error(e);setErr('Не удалось получить данные');}finally{setLoading(false);}};
+        useEffect(()=>{if(provider&&acct)refresh();},[provider,acct]);
+
+        const balBN=dir==='E2R'?ethBal:rubBal;const balStr=dir==='E2R'?`${fmt(ethBal)} ETH`:`${fmt(rubBal,dec)} RUBT`;
+        const amountBN=()=>{if(!amt)return null;try{return dir==='E2R'?ethers.utils.parseEther(amt):ethers.utils.parseUnits(amt,dec);}catch{return null;}};
+        const receiveBN=()=>{const a=amountBN();if(!a)return null;if(dir==='E2R'&&rates.buy)return mulDiv(a,rates.buy,ethers.constants.WeiPerEther);if(dir==='R2E'&&rates.sell)return mulDiv(a,rates.sell,ethers.utils.parseUnits('1',dec));return null;};
+        const recvStr=()=>{const r=receiveBN();if(!r)return '—';return dir==='E2R'?`${fmt(r,dec,6)} RUBT`:`${fmt(r,18,6)} ETH`;};
+        const priceStr=()=>{if(dir==='E2R'&&rates.buy)return`1 ETH = ${fmt(rates.buy,dec,6)} RUBT`;if(dir==='R2E'&&rates.sell)return`1 RUBT = ${fmt(rates.sell,18,6)} ETH`;return '—';};
+        const insuff=()=>{const a=amountBN();return a&&balBN&&a.gt(balBN);} ;
+        const limitEx=()=>{const a=amountBN();if(!a)return false;if(dir==='E2R'&&rates.buyLim){const out=receiveBN();return out&&out.gt(rates.buyLim);}if(dir==='R2E'&&rates.sellLim)return a.gt(rates.sellLim);return false;};
+        const canSwap=()=>signer&&!busy&&amt&&!insuff()&&!limitEx()&&(dir==='E2R'?rates.buy:rates.sell);
+        const fill=p=>{if(!balBN)return;const v=balBN.mul(p).div(100);const s=dir==='E2R'?ethers.utils.formatEther(v):ethers.utils.formatUnits(v,dec);setAmt(s.replace(/\.0+$/,''));};
+
+        const swap=async()=>{if(!canSwap())return;setBusy(true);setSwapMsg('');setTxh(null);try{const t=new ethers.Contract(RUBT_ADDRESS,RUBT_ABI,signer);if(dir==='E2R'){const v=ethers.utils.parseEther(amt);const tx=await t.buy(rates.buy,{value:v});await tx.wait();setTxh(tx.hash);}else{const v=ethers.utils.parseUnits(amt,dec);const tx=await t.sell(v,rates.sell);await tx.wait();setTxh(tx.hash);}refresh();}catch(e){if(e.code==='ACTION_REJECTED'){setSwapMsg('Транзакция отменена пользователем.');}else{console.error(e);setSwapMsg(e.data?.message||e.message);} }finally{setBusy(false);} };
+
+        return(<div className="bg-white p-6 rounded-2xl shadow-xl w-full max-w-lg"><h1 className="text-2xl font-bold flex gap-2 justify-center items-center mb-4"><img src={RUBT_LOGO} className="h-8 w-8"/>RUBT ⇄ ETH<img src={ETH_LOGO} className="h-8 w-8"/></h1><div className="flex gap-3 justify-center mb-3"><button onClick={connect} className="px-4 py-2 bg-blue-600 text-white rounded-xl">{acct?`✔ ${acct.slice(0,6)}…${acct.slice(-4)}`:'MetaMask'}</button><button onClick={refresh} disabled={!provider||loading} className="px-4 py-2 border rounded-xl relative">{loading?<span className="animate-spin inline-block h-5 w-5 border-2 border-t-transparent rounded-full"/>:'↻'}</button></div>{acct&&<p className="text-xs text-center mb-2">Баланс: {balStr}</p>}{err&&<p className="text-xs text-center text-red-600 mb-2">{err}</p>}
+            <div className="space-y-2 mb-3"><div className="relative"><img src={tokenLogo} className="h-5 w-5 absolute left-3 top-3"/><input type="number" value={amt} min="0" onChange={e=>{setAmt(e.target.value);setSwapMsg('');}} placeholder="0.0" className="w-full pl-10 p-3 border rounded-xl"/></div><div className="flex gap-2 text-xs justify-end">{[25,50,75,100].map(p=> <button key={p} onClick={()=>fill(p)} className="px-2 py-1 border rounded-md hover:bg-gray-100">{p}%</button>)}</div></div>
+            <p className="text-sm text-center">Вы получите <strong>{recvStr()}</strong></p><p className="text-xs text-center text-gray-600 mb-3">Курс: {priceStr()}</p>{insuff()&&<p className="text-xs text-red-600 text-center mb-2">Недостаточно средств</p>}{limitEx()&&<p className="text-xs text-red-600 text-center mb-2">Превышен лимит операции</p>}{swapMsg&&<p className="text-xs text-red-600 text-center mb-2">{swapMsg}</p>}
+            <div className="space-y-3"><button onClick={()=>{setDir(dir==='E2R'?'R2E':'E2R');setAmt('');setSwapMsg('');}} className="w-full py-2 border rounded-xl">⇅ {dir==='E2R'?'ETH → RUBT':'RUBT → ETH'}</button><button onClick={swap} disabled={!canSwap()} className={`w-full py-2 rounded-xl text-white ${canSwap()?'bg-green-600 hover:bg-green-700':'bg-gray-400'}`}>{busy?'Отправка…':'Обменять'}</button></div>{txh&&<a href={`https://etherscan.io/tx/${txh}`} target="_blank" className="block text-center text-blue-600 underline mt-4">Транзакция</a>}</div>);
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<Swap/>);
+</script>
+</body>
+</html>
