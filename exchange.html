@@ -8,14 +8,14 @@
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
 
-    <!-- Ethers.js (v5) -->
+    <!-- Ethers.js v5 -->
     <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
 
     <!-- React 18 (development build) -->
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
 
-    <!-- Babel (для inline JSX) -->
+    <!-- Babel (inline JSX) -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 </head>
 <body class="bg-gray-100 min-h-screen flex items-center justify-center">
@@ -25,7 +25,7 @@
     const { useState, useEffect } = React;
     const { ethers }              = window.ethers;
 
-    /* ========== CONFIG ========== */
+    /* ========= CONFIG ========= */
     const RUBT_ADDRESS = "0x5F3011a4694C7228f3166fec1253351D8830606D";
     const RUBT_ABI = [
         "function buy(uint256 expectedRate) payable",
@@ -37,49 +37,69 @@
     const ETH_LOGO  = "https://upload.wikimedia.org/wikipedia/commons/7/70/Ethereum_logo.svg";
     const RUBT_LOGO = "https://rubtowner.github.io/logo.svg";
 
-    /* ========== HELPERS ========== */
+    /* ========= HELPERS ========= */
     const fmt = (bn, dec = 18, max = 6) =>
-        bn ? Number(ethers.utils.formatUnits(bn, dec)).toLocaleString("en-US", { maximumFractionDigits: max }) : "—";
+        bn
+            ? Number(ethers.utils.formatUnits(bn, dec)).toLocaleString(
+                "en-US",
+                { maximumFractionDigits: max }
+            )
+            : "—";
 
-    /* ========== COMPONENT ========== */
+    /* ========= COMPONENT ========= */
     function Swap() {
-        /* Wallet / provider */
+        /* ----- wallet / provider ----- */
         const [provider, setProvider] = useState(null);
         const [signer,   setSigner]   = useState(null);
         const [account,  setAccount]  = useState(null);
 
-        /* On-chain */
-        const [dec,   setDec]   = useState(18);
-        const [rates, setRates] = useState({ buy:null, sell:null, buyLim:null, sellLim:null, exp:null });
+        /* ----- on-chain ----- */
+        const [dec, setDec]       = useState(18);
+        const [rates, setRates]   = useState({
+            buy: null, sell: null, buyLim: null, sellLim: null, exp: null
+        });
         const [blockNum, setBlockNum] = useState(null);
         const [ethBal, setEthBal] = useState(null);
         const [rubBal, setRubBal] = useState(null);
 
-        /* UI */
+        /* ----- ui ----- */
         const [amount, setAmount] = useState("");
-        const [dir, setDir]       = useState("E2R");           // ETH→RUBT
+        const [dir, setDir]       = useState("E2R");        // ETH→RUBT
         const [loading, setLoading] = useState(false);
         const [busy, setBusy]       = useState(false);
         const [netErr, setNetErr]   = useState("");
         const [msg, setMsg]         = useState("");
         const [txHash, setTxHash]   = useState(null);
 
-        /* ========== MetaMask connect ========== */
+        /* ========== silent auto-connect ========== */
+        useEffect(() => {
+            (async () => {
+                if (!window.ethereum) return;
+                const p = new ethers.providers.Web3Provider(window.ethereum);
+                const accs = await p.send("eth_accounts", []);
+                if (accs.length) {
+                    setProvider(p);
+                    setSigner(p.getSigner());
+                    setAccount(accs[0]);
+                }
+            })();
+        }, []);
+
+        /* ========== manual connect ========== */
         async function connect() {
             if (!window.ethereum) { alert("MetaMask не установлен"); return; }
             const p = new ethers.providers.Web3Provider(window.ethereum);
-            await p.send("eth_requestAccounts", []);
-            setProvider(p);
-            setSigner(p.getSigner());
-            setAccount(await p.getSigner().getAddress());
+            const accs = await p.send("eth_requestAccounts", []);
+            setProvider(p); setSigner(p.getSigner()); setAccount(accs[0]);
         }
 
-        /* ========== Refresh chain data ========== */
+        /* ========== refresh chain data ========== */
         async function refresh() {
             if (!provider || !account) return;
             try {
                 setLoading(true); setNetErr("");
                 const t = new ethers.Contract(RUBT_ADDRESS, RUBT_ABI, provider);
+
                 const [blk, info, eBal, rBal, d] = await Promise.all([
                     provider.getBlockNumber(),
                     t.rates(),
@@ -87,28 +107,32 @@
                     t.balanceOf(account),
                     t.decimals()
                 ]);
+
                 const [buyR, sellR, buyAmt, sellAmt, expBlk] = info;
                 setBlockNum(blk);
                 setDec(d);
-                setRates({ buy:buyR, sell:sellR, buyLim:buyAmt, sellLim:sellAmt, exp:expBlk });
+                setRates({ buy: buyR, sell: sellR, buyLim: buyAmt, sellLim: sellAmt, exp: expBlk });
                 setEthBal(eBal); setRubBal(rBal);
             } catch (e) {
                 console.error(e);
                 setNetErr("Не удалось получить данные");
-            } finally { setLoading(false); }
+            } finally {
+                setLoading(false);
+            }
         }
         useEffect(() => { if (provider && account) refresh(); }, [provider, account]);
 
-        /* ========== Calculations ========== */
-        const expired   = () => rates.exp && blockNum && blockNum > rates.exp;
-        const activeBN  = dir==="E2R" ? ethBal : rubBal;
-        const activeStr = dir==="E2R" ? `${fmt(ethBal)} ETH` : `${fmt(rubBal,dec)} RUBT`;
-        const tokenLogo = dir==="E2R" ? ETH_LOGO : RUBT_LOGO;
+        /* ========== calculations ========== */
+        const expired     = () => rates.exp && blockNum && blockNum > rates.exp;
+        const activeBN    = dir==="E2R" ? ethBal : rubBal;
+        const activeStr   = dir==="E2R" ? `${fmt(ethBal)} ETH` : `${fmt(rubBal, dec)} RUBT`;
+        const tokenLogo   = dir==="E2R" ? ETH_LOGO : RUBT_LOGO;
 
         const amountBN = () => {
             if (!amount) return null;
             try {
-                return dir==="E2R" ? ethers.utils.parseEther(amount)
+                return dir==="E2R"
+                    ? ethers.utils.parseEther(amount)
                     : ethers.utils.parseUnits(amount, dec);
             } catch { return null; }
         };
@@ -116,11 +140,12 @@
         const receiveBN = () => {
             const a = amountBN(); if (!a) return null;
             if (dir==="E2R" && rates.buy)
-                return a.mul(rates.buy).div(ethers.constants.WeiPerEther);      // ETHwei × buy / 1e18
+                return a.mul(rates.buy).div(ethers.constants.WeiPerEther);   // ETHwei * buy / 1e18
             if (dir==="R2E" && rates.sell)
-                return a.mul(ethers.constants.WeiPerEther).div(rates.sell);      // RUBT × 1e18 / sell
+                return a.mul(ethers.constants.WeiPerEther).div(rates.sell);  // RUBT * 1e18 / sell
             return null;
         };
+
         const receiveStr = () => {
             const r = receiveBN(); if (!r) return "—";
             return dir==="E2R" ? `${fmt(r, dec)} RUBT` : `${fmt(r, 18)} ETH`;
@@ -128,13 +153,13 @@
 
         const priceStr = () => {
             if (!rates.buy || !rates.sell) return "—";
-            if (expired())                return "Курс устарел";
+            if (expired()) return "Курс устарел";
             return dir==="E2R"
                 ? `1 ETH = ${fmt(rates.buy, dec)} RUBT`
                 : `1 ETH = ${fmt(rates.sell, dec)} RUBT`;
         };
 
-        /* Validation */
+        /* validation */
         const insufficient = () => { const a=amountBN(); return a && activeBN && a.gt(activeBN); };
         const limitExceeded = () => {
             const a=amountBN(); if (!a) return false;
@@ -147,21 +172,24 @@
             !insufficient() && !limitExceeded() &&
             (dir==="E2R" ? rates.buy : rates.sell);
 
-        /* Quick-fill */
-        const fillPct = p => {
+        /* quick-fill */
+        const fillPct = pct => {
             if (!activeBN) return;
-            const v = activeBN.mul(p).div(100);
-            const s = dir==="E2R" ? ethers.utils.formatEther(v)
+            const v = activeBN.mul(pct).div(100);
+            const s = dir==="E2R"
+                ? ethers.utils.formatEther(v)
                 : ethers.utils.formatUnits(v, dec);
             setAmount(s.replace(/\\.0+$/, ""));
         };
 
-        /* ========== Swap action ========== */
+        /* ========== swap tx ========== */
         async function swap() {
             if (!isSwapAllowed) return;
             setBusy(true); setMsg(""); setTxHash(null);
+
             try {
                 const t = new ethers.Contract(RUBT_ADDRESS, RUBT_ABI, signer);
+
                 if (dir==="E2R") {
                     const value = ethers.utils.parseEther(amount);
                     const tx = await t.buy(rates.buy, { value });
@@ -173,7 +201,7 @@
                 }
                 refresh();
             } catch (e) {
-                if (e.code === "ACTION_REJECTED")         setMsg("Транзакция отменена пользователем.");
+                if (e.code === "ACTION_REJECTED")           setMsg("Транзакция отменена пользователем.");
                 else if (e.code === "UNPREDICTABLE_GAS_LIMIT") setMsg("Контракт отказал: проверьте сумму / лимиты.");
                 else { console.error(e); setMsg(e.data?.message || e.message); }
             } finally { setBusy(false); }
@@ -183,22 +211,29 @@
         return (
             <div className="bg-white p-6 rounded-2xl shadow-xl w-full max-w-lg">
                 <h1 className="text-2xl font-bold flex items-center justify-center gap-2 mb-4">
-                    <img src={RUBT_LOGO} className="h-8 w-8" alt="RUBT" />
+                    <img src={RUBT_LOGO} className="h-8 w-8" alt="RUBT"/>
                     RUBT ⇄ ETH
-                    <img src={ETH_LOGO} className="h-8 w-8" alt="ETH" />
+                    <img src={ETH_LOGO} className="h-8 w-8" alt="ETH"/>
                 </h1>
 
-                {/* Wallet buttons */}
+                {/* wallet */}
                 <div className="flex justify-center gap-3 mb-3">
-                    <button onClick={connect}
-                            className="px-4 py-2 rounded-xl bg-blue-600 text-white hover:bg-blue-700">
-                        {account ? `✔ ${account.slice(0,6)}…${account.slice(-4)}` : "Подключить MetaMask"}
-                    </button>
+                    {!account && (
+                        <button onClick={connect}
+                                className="px-4 py-2 rounded-xl bg-blue-600 text-white hover:bg-blue-700">
+                            Подключить кошелёк
+                        </button>
+                    )}
+                    {account && (
+                        <span className="px-4 py-2 bg-green-100 rounded-xl text-green-800">
+                ✔ {account.slice(0, 6)}…{account.slice(-4)}
+              </span>
+                    )}
 
                     <button onClick={refresh} disabled={!provider || loading}
                             className="px-4 py-2 border rounded-xl relative">
                         {loading
-                            ? <span className="animate-spin inline-block h-5 w-5 border-2 border-t-transparent rounded-full" />
+                            ? <span className="animate-spin inline-block h-5 w-5 border-2 border-t-transparent rounded-full"/>
                             : "↻"}
                     </button>
                 </div>
@@ -206,14 +241,14 @@
                 {account && <p className="text-xs text-center mb-2">Баланс: {activeStr}</p>}
                 {netErr  && <p className="text-xs text-center text-red-600 mb-2">{netErr}</p>}
 
-                {/* Amount input */}
+                {/* amount */}
                 <div className="space-y-2 mb-3">
                     <div className="relative">
-                        <img src={tokenLogo} className="h-5 w-5 absolute left-3 top-3" alt="" />
+                        <img src={tokenLogo} className="h-5 w-5 absolute left-3 top-3" alt=""/>
                         <input type="number" min="0" value={amount}
                                onChange={e => { setAmount(e.target.value); setMsg(""); }}
                                placeholder="0.0"
-                               className="w-full pl-10 p-3 border rounded-xl" />
+                               className="w-full pl-10 p-3 border rounded-xl"/>
                     </div>
                     <div className="flex justify-end gap-2 text-xs">
                         {[25,50,75,100].map(pct => (
@@ -225,19 +260,20 @@
                     </div>
                 </div>
 
-                {/* Calculations / price */}
-                <p className="text-sm text-center">Вы получите <strong>{receiveStr()}</strong></p>
-                <p className="text-xs text-center text-gray-600 mb-3">Курс: {priceStr()}</p>
+                <p className="text-sm text-center">
+                    Вы получите <strong>{receiveStr()}</strong>
+                </p>
+                <p className="text-xs text-center text-gray-600 mb-3">
+                    Курс: {priceStr()}
+                </p>
 
-                {/* Warnings */}
                 {expired()       && <p className="text-xs text-red-600 text-center mb-2">Курс устарел</p>}
                 {insufficient()  && <p className="text-xs text-red-600 text-center mb-2">Недостаточно средств</p>}
                 {limitExceeded() && <p className="text-xs text-red-600 text-center mb-2">Превышен лимит операции</p>}
                 {msg            && <p className="text-xs text-red-600 text-center mb-2">{msg}</p>}
 
-                {/* Swap controls */}
                 <div className="space-y-3">
-                    <button onClick={() => { setDir(dir==="E2R"?"R2E":"E2R"); setAmount(""); setMsg(""); }}
+                    <button onClick={() => { setDir(dir==="E2R" ? "R2E" : "E2R"); setAmount(""); setMsg(""); }}
                             className="w-full py-2 border rounded-xl">
                         ⇅ {dir==="E2R" ? "ETH → RUBT" : "RUBT → ETH"}
                     </button>
@@ -250,12 +286,12 @@
                     </button>
                 </div>
 
-                {/* Tx link */}
-                {txHash &&
+                {txHash && (
                     <a href={`https://etherscan.io/tx/${txHash}`} target="_blank" rel="noopener noreferrer"
                        className="block text-center text-blue-600 underline mt-4">
                         Транзакция
-                    </a>}
+                    </a>
+                )}
             </div>
         );
     }
