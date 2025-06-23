@@ -1,13 +1,79 @@
 <!doctype html>
-<html lang="en">
+<html lang="ru">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/rubt.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>RUBT ⇆ ETH Обмен</title>
-    <script type="module" crossorigin src="/assets/index-BHC9wrCM.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-D2SxGRwD.css">
+    <title>RUBT — Стабильный токен</title>
+    <script type="module" crossorigin src="/assets/index-r7Fc_-bA.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/Exchange-BuPfzeS7.js">
+    <link rel="stylesheet" crossorigin href="/assets/Exchange-DzO4ucvP.css">
   </head>
-  <body class="bg-gray-100 flex items-center justify-center h-screen">
+  <body class="bg-gray-100 h-screen">
+    <header class="bg-white p-4 mb-4">
+      <div class="flex w-full max-w-6xl mx-auto">
+        <img src="/rubt.svg" alt="RUBT Logo" class="w-10 h-10 mr-2" />
+        <h1 class="content-center text-xl text-[#E1306C]"><b>RUBT</b> — Стабильный токен</h1>
+      </div>
+    </header>
+    <div class="flex w-full max-w-6xl mx-auto gap-4">
+      <main class="bg-white w-full p-6 rounded-xl">
+        <h2 class="text-2xl mb-4">Что такое RUBT?</h2>
+        <p>
+          <b>RUBT</b> — это стандартный ERC20 токен в сети Ethereum, который находится по адресу
+          <a href="https://etherscan.io/token/0x5F3011a4694C7228f3166fec1253351D8830606D" target="_blank">0x5F3011a4694C7228f3166fec1253351D8830606D</a>.
+        </p>
+        <p>
+          За 1 ETH вы <b>всегда</b> получите то же количество <b>RUBT</b> чтобы вы получили в наличных рублях и наоборот.
+          Это главное и самое важное свойство стабильного <b>RUBT</b> токена.
+        </p>
+        <p>
+          В контракте <b>RUBT</b> нет и <b>никогда</b> не будет реализован механизм блокировок или заморозки.
+        </p>
+        <p>
+          Самый простой способ начать использовать <b>RUBT</b> — это добавить RUBT токен в кошелек.
+          Далее обменять ETH на <b>RUBT</b> или наоборот.
+        </p>
+        <h2>Основные функции контракта</h2>
+        <h3><a href="https://etherscan.io/address/0x5F3011a4694C7228f3166fec1253351D8830606D#readProxyContract#F5" target="_blank">rates</a></h3>
+        <p>
+          Возвращает текущий курс обмена.
+        </p>
+        <ul>
+          <li><i>buyRate</i> — курс обмена 1 ETH на RUBT</li>
+          <li><i>sellRate</i> — курс обмена RUBT на 1 ETH</li>
+        </ul>
+        <h3><a href="https://etherscan.io/address/0x5F3011a4694C7228f3166fec1253351D8830606D#writeProxyContract#F4">buy</a></h3>
+        <p>
+          Обмен ETH на RUBT. При вызове этого метода вы должны отправить ETH, который будет обменен на RUBT по текущему
+          курсу. Обязательный параметр <i>expectedRate</i> — ожидаемый курс обмена, он должен быть не ниже чем установленный курс,
+          иначе транзакция будет отменена. Результатом будет зачисление RUBT на адрес вызывающего.
+        </p>
+        <ul>
+          <li><i>expectedRate</i> — ожидаемые курс обмена 1 ETH на RUBT</li>
+        </ul>
+        <h3><a href="https://etherscan.io/address/0x5F3011a4694C7228f3166fec1253351D8830606D#writeProxyContract#F7">sell</a></h3>
+        <p>
+          Обмен RUBT на ETH. При вызове этого метода вы должны указать количество RUBT, который будет обменен на ETH по текущему
+          курсу. Обязательный параметр <i>expectedRate</i> — ожидаемый курс обмена, он должен быть не выше чем установленный курс,
+          иначе транзакция будет отменена. Результатом будет перевод ETH на адрес вызывающего.
+        </p>
+        <ul>
+          <li><i>value</i> — количество RUBT для обмена</li>
+          <li><i>expectedRate</i> — ожидаемые курс обмена RUBT на 1 ETH</li>
+        </ul>
+      </main>
+      <aside>
+        <div class="mb-4" id="exchange"></div>
+        <div id="add-rubt-to-metamask"></div>
+      </aside>
+    </div>
+    <footer class="bg-gray-600 text-white p-4 mt-4">
+      <div class="flex w-full max-w-6xl mx-auto">
+        <p class="text-sm">
+          2025 RUBT
+        </p>
+      </div>
+    </footer>
   </body>
 </html>
